@@ -33,13 +33,7 @@
 -- > Example.hs: [panic master@2ae047ba5e4a6f0f3e705a43615363ac006099c1 (Mon Jan 11 11:50:59 2016 -0800) (14 commits in HEAD) (uncommitted files present)] oh no!
 
 module Development.GitRev
-  ( gitBranch
-  , gitCommitCount
-  , gitCommitDate
-  , gitDescribe
-  , gitDirty
-  , gitDirtyTracked
-  , gitHash
+  ( gitHash
   ) where
 
 import Control.Exception
@@ -58,10 +52,10 @@ import Prelude.Compat
 -- | Run git with the given arguments and no stdin, returning the
 -- stdout output. If git isn't available or something goes wrong,
 -- return the second argument.
-runGit :: [String] -> String -> IndexUsed -> Q String
+runGit :: [String] -> String -> IndexUsed -> Q (String, String)
 runGit args def useIdx = do
   let oops :: SomeException -> IO (ExitCode, String, String)
-      oops _e = return (ExitFailure 1, def, "")
+      oops _e = return (ExitFailure 1, def, "oops")
   gitFound <- runIO $ isJust <$> findExecutable "git"
   if gitFound
     then do
@@ -91,11 +85,11 @@ runGit args def useIdx = do
       packedExists <- runIO $ doesFileExist packedRefs
       when packedExists $ addDependentFile packedRefs
       runIO $ do
-        (code, out, _err) <- readProcessWithExitCode "git" args "" `catch` oops
+        (code, out, err) <- readProcessWithExitCode "git" args "" `catch` oops
         case code of
-          ExitSuccess   -> return (takeWhile (/= '\n') out)
-          ExitFailure _ -> return def
-    else return def
+          ExitSuccess   -> return ("", takeWhile (/= '\n') out)
+          ExitFailure badCode -> return (err, show badCode <> " " <> show err)
+    else return ("git executable not found", def)
 
 -- | Determine where our @.git@ directory is, in case we're in a
 -- submodule.
@@ -135,46 +129,6 @@ data IndexUsed = IdxUsed -- ^ The git index is used
 -- | Return the hash of the current git commit, or @UNKNOWN@ if not in
 -- a git repository
 gitHash :: ExpQ
-gitHash =
-  stringE =<< runGit ["rev-parse", "HEAD"] "UNKNOWN" IdxNotUsed
-
--- | Return the branch (or tag) name of the current git commit, or @UNKNOWN@
--- if not in a git repository. For detached heads, this will just be
--- "HEAD"
-gitBranch :: ExpQ
-gitBranch =
-  stringE =<< runGit ["rev-parse", "--abbrev-ref", "HEAD"] "UNKNOWN" IdxNotUsed
-
--- | Return the long git description for the current git commit, or
--- @UNKNOWN@ if not in a git repository.
-gitDescribe :: ExpQ
-gitDescribe =
-  stringE =<< runGit ["describe", "--long", "--always"] "UNKNOWN" IdxNotUsed
-
--- | Return @True@ if there are non-committed files present in the
--- repository
-gitDirty :: ExpQ
-gitDirty = do
-  output <- runGit ["status", "--porcelain"] "" IdxUsed
-  case output of
-    "" -> conE falseName
-    _  -> conE trueName
-
--- | Return @True@ if there are non-commited changes to tracked files
--- present in the repository
-gitDirtyTracked :: ExpQ
-gitDirtyTracked = do
-  output <- runGit ["status", "--porcelain","--untracked-files=no"] "" IdxUsed
-  case output of
-    "" -> conE falseName
-    _  -> conE trueName
-
--- | Return the number of commits in the current head
-gitCommitCount :: ExpQ
-gitCommitCount =
-  stringE =<< runGit ["rev-list", "HEAD", "--count"] "UNKNOWN" IdxNotUsed
-
--- | Return the commit date of the current head
-gitCommitDate :: ExpQ
-gitCommitDate =
-  stringE =<< runGit ["log", "HEAD", "-1", "--format=%cd"] "UNKNOWN" IdxNotUsed
+gitHash = do
+  (err, res) <- runGit ["rev-parse", "HEAD"] "UNKNOWN" IdxNotUsed
+  stringE (err <> " " <> res)
