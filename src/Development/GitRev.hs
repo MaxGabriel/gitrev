@@ -99,13 +99,16 @@ getDotGit = do
   let dotGit = pwd </> ".git"
       oops = return dotGit -- it's gonna fail, that's fine
   isDir <- doesDirectoryExist dotGit
+  putStrLn $ "isDir = " <> show isDir
   isFile <- doesFileExist dotGit
+  putStrLn $ "isFile = " <> show isFile
   if | isDir -> return dotGit
      | not isFile -> oops
      | isFile ->
          splitAt 8 `fmap` readFile dotGit >>= \case
            ("gitdir: ", relDir) -> do
              isRelDir <- doesDirectoryExist relDir
+             putStrLn $ "isRelDir = " <> show isRelDir
              if isRelDir
                then return relDir
                else oops
@@ -115,8 +118,10 @@ getDotGit = do
 getGitRoot :: IO FilePath
 getGitRoot = do
   pwd <- getCurrentDirectory
-  (code, out, _) <-
+  putStrLn $ "Current directory is " <> pwd
+  (code, out, err) <-
     readProcessWithExitCode "git" ["rev-parse", "--show-toplevel"] ""
+  putStrLn $ "When getting top level, code was" <> show code <> "err was " <> show err
   case code of
     ExitSuccess   -> return $ takeWhile (/= '\n') out
     ExitFailure _ -> return pwd -- later steps will fail, that's fine
