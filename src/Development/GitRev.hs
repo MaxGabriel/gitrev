@@ -98,6 +98,7 @@ getDotGit = do
   pwd <- getGitRoot
   let dotGit = pwd </> ".git"
       oops = return dotGit -- it's gonna fail, that's fine
+  putStrLn $ "dotGit is" <> dotGit
   isDir <- doesDirectoryExist dotGit
   putStrLn $ "isDir = " <> show isDir
   isFile <- doesFileExist dotGit
@@ -121,7 +122,7 @@ getGitRoot = do
   putStrLn $ "Current directory is " <> pwd
   (code, out, err) <-
     readProcessWithExitCode "git" ["rev-parse", "--show-toplevel"] ""
-  putStrLn $ "When getting top level, code was" <> show code <> "err was " <> show err
+  putStrLn $ "When getting top level, code was" <> show code <> " err was " <> show err
   case code of
     ExitSuccess   -> return $ takeWhile (/= '\n') out
     ExitFailure _ -> return pwd -- later steps will fail, that's fine
@@ -136,4 +137,6 @@ data IndexUsed = IdxUsed -- ^ The git index is used
 gitHash :: ExpQ
 gitHash = do
   (err, res) <- runGit ["rev-parse", "HEAD"] "UNKNOWN" IdxNotUsed
+  runIO $ putStrLn $ "Error is " <> show err
+  runIO $ putStrLn $ "Res is " <> res
   stringE (err <> " " <> res)
